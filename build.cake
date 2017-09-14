@@ -54,7 +54,8 @@ Task("Run-Unit-Tests")
     .Does(() =>
 {
     NUnit3("./src/**/bin/" + configuration + "/*.Tests.dll", new NUnit3Settings {
-        NoResults = true
+        NoResults = true,
+        Process = NUnit3ProcessOption.InProcess
         });
 });
 
@@ -62,11 +63,11 @@ Task("Package")
     .IsDependentOn("Run-Unit-Tests")
     .Does(() =>
 {
-	var settings = new DotNetCorePackSettings()
-	{
-		OutputDirectory = "./output/",
-		Configuration = configuration
-	};
+    var settings = new DotNetCorePackSettings()
+    {
+        OutputDirectory = "./output/",
+        Configuration = configuration
+    };
     DotNetCorePack("./src/Pipelines/Pipelines.csproj", settings);
 });
 
