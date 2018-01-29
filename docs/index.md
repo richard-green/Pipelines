@@ -11,38 +11,54 @@ Each pipeline can control the number of threads allocated to processing the work
 As an example, you could construct a pipeline that computes SHA1 hashes of all files in a given directory like so:
 
 ```C#
-
 var pipeline = new Pipeline<string, FileSha1Result>(FileSha1Result.Compute, processingThreads: 4);
-pipeline.Add(Directory.EnumerateFiles(@"D:\ScanFolder", "*", SearchOption.AllDirectories));
+pipeline.Add(Directory.EnumerateFiles(@"D:\Git\Pipelines", "*", SearchOption.AllDirectories));
 pipeline.CompleteAdding();
-
-List<FileSha1Result> results = await pipeline.ToListAsync();
-
+var results = await pipeline.ToListAsync();
 ```
 
 In this example, the FileSha1Result class would be defined as follows:
 
 ```C#
+public class FileSha1Result
+{
+	public string FileName { get; set; }
+	public string Hash { get; set; }
+	public bool Success { get; set; }
 
-    public class FileSha1Result
-    {
-        public string FileName { get; set; }
-        public string Hash { get; set; }
+	public static FileSha1Result Compute(string fileName)
+	{
+		try
+		{
+			using (var stream = File.OpenRead(fileName))
+			{
+				var algo = SHA1.Create();
+				var hash = algo.ComputeHash(stream);
 
-        public static FileSha1Result Compute(string fileName)
-        {
-            using (var stream = File.OpenRead(fileName))
-            {
-                var algo = SHA1.Create();
-                var hash = algo.ComputeHash(stream);
+				var results = new FileSha1Result()
+				{
+					FileName = fileName,
+					Hash = BitConverter.ToString(hash),
+					Success = true
+				};
 
-                return new FileSha1Result()
-                {
-                    FileName = fileName,
-                    Hash = BitConverter.ToString(hash)
-                };
-            }
-        }
-    }
+				Debug.WriteLine($"{results.FileName} ==> {results.Hash}");
 
+				return results;
+			}
+		}
+		catch (Exception ex)
+		{
+			var results = new FileSha1Result()
+			{
+				FileName = fileName,
+				Success = false
+			};
+
+			Debug.WriteLine($"{results.FileName} ==> {ex.Message}");
+
+			return results;
+		}
+	}
+}
 ```
