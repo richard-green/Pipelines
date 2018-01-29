@@ -36,12 +36,24 @@ namespace Pipelines
                     {
                         foreach (var item in input.GetConsumingEnumerable(cancel.Token))
                         {
-                            var mapped = processor(item).Result;
-                            output.Add(mapped);
+                            try
+                            {
+                                if (item != null)
+                                {
+                                    var mapped = processor(item).Result;
+                                    output.Add(mapped);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                CancelProcessing(ex);
+                                break;
+                            }
                         }
                     }
                     catch (OperationCanceledException)
                     {
+                        // Ignore - the pipeline was canceled
                     }
                 },
                 TaskCreationOptions.LongRunning);

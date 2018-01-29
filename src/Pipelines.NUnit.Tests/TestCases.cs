@@ -1,4 +1,5 @@
 ﻿using NUnit.Framework;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -198,6 +199,22 @@ namespace Pipelines.Tests
             }
         }
 
+        [Test]
+        public async Task TestExceptions()
+        {
+            int processingThreads = 1;
+            int inputCap = 0;
+
+            var pipe1 = new AsyncPipeline<string, string>(AddAsyncException, processingThreads, inputCap);
+
+            pipe1.Add(Enumerable.Range(0, 5).Select(i => i.ToString()));
+            pipe1.CompleteAdding();
+
+            var results = await pipe1.ToListAsync();
+
+            Assert.AreEqual(results.Count, 0, "results.Count");
+        }
+
         private static string AddSync(string input)
         {
             return input + " sync";
@@ -207,6 +224,12 @@ namespace Pipelines.Tests
         {
             await Task.Delay(100);
             return input + " async";
+        }
+
+        private static async Task<string> AddAsyncException(string input)
+        {
+            await Task.Delay(100);
+            throw new ApplicationException("Failure in AddAsyncException");
         }
 
         private static string ToString(int i)

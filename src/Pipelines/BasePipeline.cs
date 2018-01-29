@@ -7,7 +7,12 @@ using System.Threading.Tasks;
 
 namespace Pipelines
 {
-    public abstract class BasePipeline<T, U>
+    public interface INotifyException
+    {
+        void Notify(Exception ex);
+    }
+
+    public abstract class BasePipeline<T, U> : INotifyException
     {
         protected BlockingCollection<T> input;
         protected BlockingCollection<U> output;
@@ -17,6 +22,8 @@ namespace Pipelines
         private bool completed;
         private Task completionTask;
         private bool consumerAttached;
+        private INotifyException notify;
+        private Exception exception;
 
         public BasePipeline(int processingThreads = 1, int inputCap = 0)
         {
@@ -34,11 +41,17 @@ namespace Pipelines
 
         private async Task WaitForCompletion()
         {
-            await Task.WhenAll(tasks);
-            output.CompleteAdding();
-            completed = true;
-            tasks = null;
-            input = null;
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            finally
+            {
+                output.CompleteAdding();
+                completed = true;
+                tasks = null;
+                input = null;
+            }
         }
 
         /// <summary>
@@ -96,6 +109,27 @@ namespace Pipelines
         }
 
         /// <summary>
+        /// I encountered an error and must abort
+        /// </summary>
+        /// <param name="ex"></param>
+        protected void CancelProcessing(Exception ex)
+        {
+            CancelProcessing();
+            notify?.Notify(ex);
+            exception = ex;
+        }
+
+        /// <summary>
+        /// The parent pipeline encountered an error
+        /// </summary>
+        /// <param name="ex"></param>
+        public void Notify(Exception ex)
+        {
+            CancelProcessing(ex);
+            exception = ex;
+        }
+
+        /// <summary>
         /// Create a new AsyncPipeline and attach to the output of this Pipeline
         /// </summary>
         /// <typeparam name="V"></typeparam>
@@ -132,6 +166,7 @@ namespace Pipelines
         /// <param name="destinationPipeline"></param>
         public void AttachOutputTo<X>(BasePipeline<U, X> destinationPipeline)
         {
+            this.notify = destinationPipeline;
             this.ConsumeOutput(destinationPipeline.Add).ContinueWith(t => destinationPipeline.CompleteAdding());
         }
 
@@ -152,6 +187,11 @@ namespace Pipelines
                     foreach (var item in output.GetConsumingEnumerable())
                     {
                         outputProcessor(item);
+                    }
+
+                    if (exception != null)
+                    {
+                        throw exception;
                     }
                 },
                 TaskCreationOptions.LongRunning);
